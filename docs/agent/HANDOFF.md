@@ -49,9 +49,9 @@ recovery. See [runtime follow-up](../research/exact/REMAINING_EXACT_FUNCTIONS.md
 The Linux SDL3 port in `ports/sdl3` builds as a 64-bit game without touching
 the root build. That file is hashed into the semantic receipts, so keep port
 logic out of it. Its unit tests pass, and so does a headless session (splash,
-menu, play, life loss, pause, resume, menu) under ASan/UBSan. That session used
-the local v1.09 asset set (`data/`), because `original/` is absent. aarch64 has
-not been built yet. A live session on a real desktop with audio is still to be
+menu, play, life loss, pause, resume, menu) under ASan/UBSan. The session also
+passes on the verified v1.07 assets in `original/`. aarch64 has not been built
+yet. A live session on a real desktop with audio is still to be
 checked. See [the Linux build](../BUILD.md#linux-sdl3-build).
 
 ## Continue efficiently
