@@ -1,0 +1,99 @@
+name: SDL3 builds
+# Builds and tests the SDL3 game for every platform. A tag push (for example
+# sdl3-1.0) also publishes the packages on that tag's release page.
+on:
+  push:
+    branches: ['**']
+    tags: ['*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  linux:
+    name: Linux ${{ matrix.arch }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86_64, image: 'debian:bookworm', platform: linux/amd64 }
+          - { arch: i686, image: 'i386/debian:bookworm', platform: linux/386 }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build, test and package in Debian 12
+        run: >-
+          docker run --rm --platform ${{ matrix.platform }} -v "$PWD:/src" -w /src
+          ${{ matrix.image }} bash ports/sdl3/ci/linux.sh ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dxball-sdl3-linux-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+  windows:
+    name: Windows ${{ matrix.arch }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, i686]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MinGW-w64 and Wine
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            mingw-w64 cmake ninja-build zip wine wine64 wine32:i386 >/dev/null
+      - name: Build, test and package
+        run: bash ports/sdl3/ci/windows.sh ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dxball-sdl3-windows-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+  macos:
+    name: macOS arm64
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build, test and package
+        run: bash ports/sdl3/ci/macos.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dxball-sdl3-macos-arm64
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Attach the packages to the tag's release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --title "DX-Ball SDL3 $TAG" --generate-notes
+          gh release upload "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber

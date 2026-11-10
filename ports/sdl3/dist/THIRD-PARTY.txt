@@ -1,0 +1,20 @@
+Libraries distributed with this game
+====================================
+
+SDL 3 (all packages)
+    zlib license. Copyright (C) 1997-2026 Sam Lantinga.
+    Source: https://github.com/libsdl-org/SDL
+
+FluidSynth (Windows and macOS packages)
+    GNU Lesser General Public License, version 2.1 or later.
+    Source: https://github.com/FluidSynth/fluidsynth
+    The game uses it as a separate shared library; you may replace it with
+    your own build of the same version.
+
+libsndfile (Windows and macOS packages)
+    GNU Lesser General Public License, version 2.1 or later.
+    Source: https://github.com/libsndfile/libsndfile
+
+macOS packages also include the libraries Homebrew's SDL3 and FluidSynth
+depend on, in the libs folder. Each keeps its own license; their sources are
+listed at https://formulae.brew.sh/.
