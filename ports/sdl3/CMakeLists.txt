@@ -46,15 +46,27 @@ foreach(test IN ITEMS dxball_test_lp64_layout dxball_test_vtable_bridge)
 endforeach()
 
 find_package(SDL3 CONFIG REQUIRED)
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(FLUIDSYNTH IMPORTED_TARGET fluidsynth)
+endif()
 
 add_library(dxball_sdl3_platform STATIC
     "${DXBALL_ROOT}/src/sdl3_adapter.c"
     "${DXBALL_ROOT}/src/sdl3_draw.c"
-    "${DXBALL_ROOT}/src/sdl3_sound.c")
+    "${DXBALL_ROOT}/src/sdl3_sound.c"
+    "${DXBALL_ROOT}/src/sdl3_midi.c"
+    "${DXBALL_ROOT}/src/sdl3_fluidsynth.c")
 target_link_libraries(dxball_sdl3_platform PUBLIC dxball_core SDL3::SDL3 m)
 dxball_strict(dxball_sdl3_platform)
+if(FLUIDSYNTH_FOUND)
+    target_link_libraries(dxball_sdl3_platform PRIVATE PkgConfig::FLUIDSYNTH)
+    target_compile_definitions(dxball_sdl3_platform PRIVATE DXBALL_HAVE_FLUIDSYNTH)
+else()
+    message(STATUS "FluidSynth not found: music is silent")
+endif()
 
-foreach(name IN ITEMS adapter draw sound)
+foreach(name IN ITEMS adapter draw sound midi fluidsynth)
     set(test dxball_test_sdl3_${name})
     add_executable(${test} "${DXBALL_ROOT}/tests/sdl3/test_sdl3_${name}.c")
     target_include_directories(${test} PRIVATE "${DXBALL_ROOT}/tests/sdl3")
