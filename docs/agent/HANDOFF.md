@@ -52,7 +52,7 @@ logic out of it. Its unit tests pass, and so does a headless session (splash,
 menu, play, life loss, pause, resume, menu) under ASan/UBSan. The session also
 passes on the verified v1.07 assets in `original/`. aarch64 has not been built
 yet. A live session on a real desktop with audio is still to be
-checked. See [the Linux build](../BUILD.md#linux-sdl3-build).
+checked. See [the Linux build](../BUILD.md#sdl3-build).
 
 ## Continue efficiently
 

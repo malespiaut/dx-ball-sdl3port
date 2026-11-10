@@ -116,12 +116,12 @@ serial resource limits in [AGENTS.md](../AGENTS.md).
 The [playability record](research/PLAYABILITY_20261031.md) separates these checks
 from manual Windows feedback and the historical focus failure.
 
-## Linux SDL3 build
+## SDL3 build
 
-`ports/sdl3` builds a native 64-bit Linux game from the same recovered source.
-The root project and its compiler recipes are unchanged. The port replaces only
-the Win32, DirectDraw, DirectSound and WinMM import bindings that
-`windows_adapter.c` supplies on Windows:
+`ports/sdl3` builds a native game for Linux, macOS and Windows, 32- and 64-bit,
+from the same recovered source. The root project and its compiler recipes are
+unchanged. The port replaces only the Win32, DirectDraw, DirectSound and WinMM
+import bindings that `windows_adapter.c` supplies on Windows:
 
 | File | Replaces |
 | --- | --- |
@@ -131,11 +131,21 @@ the Win32, DirectDraw, DirectSound and WinMM import bindings that
 | [sdl3_midi.c](../src/sdl3_midi.c), [sdl3_fluidsynth.c](../src/sdl3_fluidsynth.c) | WinMM MIDI streams, rendered by FluidSynth |
 | [sdl3_entry.c](../src/sdl3_entry.c) | `main`: binds the services and runs the original `WinMain` loop |
 
-Requirements: CMake 3.20+, Ninja, GCC or Clang, SDL3 3.2+ and Python 3.11+.
-FluidSynth with a General MIDI soundfont is optional; without it the music is
-silent. The game uses `$DXBALL_SOUNDFONT`, or else the first soundfont it finds
-among `/usr/share/soundfonts/FluidR3_GM.sf2`, `default.sf2` and the
-`/usr/share/sounds/sf2` equivalents.
+Requirements: CMake 3.20+, Ninja, GCC or Clang (MinGW-w64 for Windows),
+SDL3 3.2+ and Python 3.11+ for the tests. FluidSynth with a General MIDI
+soundfont is optional; without it the music is silent. FluidSynth is only a
+build-time header dependency: the game loads `libfluidsynth` when it starts
+(`$DXBALL_FLUIDSYNTH`, else the game folder or its `libs/`, else the system), so
+it runs on systems without FluidSynth. The game uses
+`$DXBALL_SOUNDFONT`, else `soundfont.sf2` in the game folder, else the first
+soundfont it finds among `/usr/share/soundfonts/FluidR3_GM.sf2`, `default.sf2`
+and the `/usr/share/sounds/sf2` equivalents.
+
+The game opens its files from the current folder. When `intro.pcx` is not
+there, it changes to its own folder, so a desktop launch from the game folder
+works. Without game data it stops with a message box and a console message.
+
+### Linux
 
 ```bash
 cmake -S ports/sdl3 -B build/sdl3 -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -160,6 +170,56 @@ clock; the original readme calls 60 FPS "the standard" speed. Surfaces are never
 lost, so the unresolved exclusive-mode surface recovery does not apply to this
 build.
 
+For a 32-bit (i686) Linux game, install the 32-bit SDL3 (and optionally
+FluidSynth) development files and add
+`-DCMAKE_C_FLAGS=-m32 -DCMAKE_CXX_FLAGS=-m32`, with
+`PKG_CONFIG_EXECUTABLE` pointing at the i686 `pkg-config` wrapper.
+
+### Windows
+
+Windows builds cross-compile with MinGW-w64 from Linux, using the official
+`SDL3-devel-<version>-mingw` package and the FluidSynth
+`win10-x64`/`win10-x86` release zips:
+
+```bash
+cmake -S ports/sdl3 -B build/sdl3-win64 -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  --toolchain "$PWD/ports/sdl3/toolchains/x86_64-w64-mingw32.cmake" \
+  "-DCMAKE_PREFIX_PATH=$SDL/x86_64-w64-mingw32;$FLUIDSYNTH" \
+  -DCMAKE_CROSSCOMPILING_EMULATOR=wine
+cmake --build build/sdl3-win64 --parallel 1
+```
+
+Use `i686-w64-mingw32.cmake` and the `i686-w64-mingw32`/`win10-x86` folders for
+32-bit Windows. The core DLL calls the SDL3 DirectDraw and DirectSound
+factories instead of the DirectX imports; WinMM's `timeGetTime` stays the
+clock, and the adapter shares its epoch. GCC runtimes are linked statically.
+With the emulator set, `ctest` runs the tests under Wine; put the SDL3,
+FluidSynth and `build/sdl3-win64/core` folders on `WINEPATH`.
+
+### macOS
+
+```bash
+brew install sdl3 fluidsynth ninja
+cmake -S ports/sdl3 -B build/sdl3 -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH="$(brew --prefix)"
+cmake --build build/sdl3 --parallel 1
+```
+
+ld64 has no GNU version or linker scripts. The port hides the recovered C++
+allocator with `-unexported_symbol`, and
+[macos/list_initializers.cpp](../ports/sdl3/macos/list_initializers.cpp) places
+the ordered board slots in one Mach-O section. `dxball_test_board_layout` checks
+that layout on every platform.
+
+### Release packages
+
+[ports/sdl3/ci](../ports/sdl3/ci) builds, tests and packages each platform; the
+`SDL3 builds` workflow runs those scripts and attaches the packages to the
+release of every pushed tag. Linux packages are built in Debian 12 (glibc 2.36)
+and carry SDL3; music uses the system's FluidSynth when it is installed. Windows packages carry SDL3,
+FluidSynth and libsndfile DLLs. The macOS package (Apple Silicon) carries its
+Homebrew libraries in `libs/`, rewritten by dylibbundler and signed ad hoc.
+
 ### Tests
 
 ```bash
@@ -180,7 +240,7 @@ The session is driven by `DXBALL_TEST_SCRIPT`, for example
 `60:key=Escape;220:click;600:shot=game.bmp;900:quit`, where each number counts
 display refreshes.
 
-### 64-bit notes
+### 64-bit and compiler notes
 
 Handles and pointers follow the host ABI. Game integers stay 32-bit. Every file
 format is parsed with fixed-width fields. Callers still pass the i386 size
@@ -198,6 +258,7 @@ cmake -S ports/sdl3 -B build/sdl3-asan -G Ninja -DCMAKE_C_FLAGS="$F" \
 virtual projections of C-built COM objects, by design. Without x87 (aarch64),
 `balls.cpp` uses native floating point, so paddle-rebound angles at exact
 threshold values can differ from the original. `long double` is also wider there.
+Clang (macOS) also compiles it without x87, as C++17 like GCC.
 Board index 50 is reached only after the final level, when the game is already
 ending. It copies across adjacent globals, as on i386, but the bytes differ
 because the LP64 explosion list is larger.

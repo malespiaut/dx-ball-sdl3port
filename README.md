@@ -1,190 +1,80 @@
-# DX-Ball reconstruction
+# DX-Ball SDL3 port
 
-This project reconstructs English DX-Ball v1.07 as readable C/C++ using the
-original executable and resources. Codex uses [REA](https://github.com/morluto/rea)
-to inspect the program through Ghidra, recover its functions, and compare code
-compiled with Visual C++ 4.0 against the original.
-
-<p align="center">
-  <a href="https://www.youtube.com/watch?v=TzRGCIkp_c4"><strong>▶ Watch the Windows build &amp; gameplay demo</strong></a><br>
-  <sub>6:20 · Compilation at 4× speed · Gameplay at normal speed</sub>
-</p>
-
-<p align="center">
-  <a href="https://www.youtube.com/watch?v=TzRGCIkp_c4">
-    <img src="https://i.ytimg.com/vi/TzRGCIkp_c4/maxresdefault.jpg" alt="Watch DX-Ball v1.07 reconstructed from its EXE: native Windows build and gameplay on YouTube" width="900">
-  </a>
-</p>
-
-<details>
-<summary>Original DX-Ball title screen</summary>
+Native Linux, macOS and Windows builds of DX-Ball v1.07, made from the
+readable C/C++ source reconstructed from the original executable. SDL3 replaces
+DirectDraw, DirectSound and the WinMM MIDI player; the recovered game code is
+unchanged.
 
 <p align="center">
   <img src="resources/dxball-title.png" alt="DX-Ball title screen" width="900">
 </p>
 
-</details>
+This fork contains only the SDL3 port. The reconstruction itself — its progress,
+the REA workflow, and building the original Windows executable with Visual C++
+4.0 — lives upstream at
+[N0zoM1z0/dx-ball](https://github.com/N0zoM1z0/dx-ball).
 
-## Progress
+## Download
 
-All **270/270 authored game functions** and **84,968/84,968 authored code bytes**
-are exact. Source recovery completed on October 22, 2026; the October 31 update
-adds native Windows build verification and windowed play results. The game
-builds from the reconstructed C/C++ with the original VC4 compiler.
+Each [release](https://github.com/malespiaut/dx-ball-sdl3port/releases) has
+ready-to-run packages:
 
-<p align="center">
-  <img src="resources/progress.svg" alt="DX-Ball source reconstruction progress" width="900">
-</p>
-
-The current game has these recorded results:
-
-| Check | Result |
+| Platform | Package |
 | --- | --- |
-| Basic play and editor | Paddle movement, ball release, pause/resume, painting, complete save/reload and normal exit pass. |
-| Game-over and rankings | Three natural life losses, name editing and complete ranking persistence through restart pass. |
-| Fifty-board terminal fixture | 50 editor-created single-brick boards, 50 real clears, final routing/storage and normal exit pass. |
-| Original-bank continuous play | A 15-minute episode reaches the third original board, with no crash. |
-| Digital audio | The game produces a verified stereo signal. |
-| Windowed Wine play | cnc-ddraw passes play/editor and 960×720 game-over, ranking save/reload and restart checks. |
-| Native Windows build | All 141 source units compile; all 270 authored functions still match. The linked image differs from the tested build only in build timestamps. |
-| Windows 11 manual play | The user reports no major playability problem with the windowed compatibility profile. |
+| Windows 10/11, 64-bit | `dxball-sdl3-windows-x86_64.zip` |
+| Windows 10/11, 32-bit | `dxball-sdl3-windows-i686.zip` |
+| Linux, 64-bit | `dxball-sdl3-linux-x86_64.tar.gz` |
+| Linux, 32-bit | `dxball-sdl3-linux-i686.tar.gz` |
+| macOS 15+, Apple Silicon | `dxball-sdl3-macos-arm64.tar.gz` |
 
-Remaining validation:
+The game data is not included. Copy the files of the English DX-Ball v1.07
+game into the package folder, next to `dxball`. On Linux the names must be
+lowercase. Music needs a General MIDI SoundFont named `soundfont.sf2` in the same
+folder, and on Linux the system's FluidSynth; without them the game plays sound
+effects only. `README-SDL3.txt` in each
+package has the details.
 
-- Complete the original 50-board campaign and exercise every power-up in live play.
-- Resolve exclusive-mode focus/surface recovery under Wine/Xvfb. The windowed wrapper uses different activation behavior.
-- Complete native graphics/audio/MIDI and frame-pacing coverage. Manual feedback is scoped separately from automated checks.
+## Build from source
 
-See [progress](docs/PROGRESS.md), the [build record](docs/research/CURRENT_VC4_BUILD.md)
-and [playability results](docs/research/PLAYABILITY_20261031.md) for counts and evidence.
-
-## Reconstruction with REA
-
-1. Inspect a function's instructions, pseudocode, calls and data references.
-2. Recover its logic in typed C/C++ and connect it to the game.
-3. Compile with VC4 and compare the complete function, then use remaining
-   differences to refine types, state writes, control flow and source layout.
-
-Comparisons map relocated calls and data references to their original addresses
-and include literals and attached metadata. The
-[projectile-list example](docs/REA.md) follows one routine from analysis to an
-exact compiler match. The [matching guide](docs/MATCHING.md) describes the records
-and comparison commands.
-
-## Build and play
-
-Prepare the workspace using the [setup guide](docs/SETUP.md). Then import the
-original game archive and build the restored-CRT profile:
+Requirements: CMake 3.20+, Ninja, GCC or Clang, and SDL3 3.2+. FluidSynth is
+optional and plays the music.
 
 ```bash
-scripts/bootstrap-python.sh
-scripts/repo-python scripts/import-target.py /path/to/DX_Ball_Win_Preinstalled_EN.zip
-scripts/repo-python scripts/bootstrap-tools.py
-scripts/repo-python scripts/build-legacy.py --restored-crt
-scripts/repo-python scripts/run-windows.py --profile vc40-restored-crt
+cmake -S ports/sdl3 -B build/sdl3 -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build/sdl3
+ctest --test-dir build/sdl3 --output-on-failure
 ```
 
-The build links 138 source objects, three integration objects and 19 original
-CRT members. Original assets are supplied separately. The
-[build guide](docs/BUILD.md) covers headless Wine, other build profiles and the
-local delivery bundle.
+On Linux, `scripts/repo-python --stdlib scripts/run-linux.py` checks the
+original files in `original/`, copies them with lowercase names to a working
+folder and starts the game there. Windows builds cross-compile from Linux with
+MinGW-w64 toolchain files in `ports/sdl3/toolchains/`. Linux and Windows build
+for 32-bit as well as 64-bit. See the [SDL3 build guide](docs/BUILD.md#sdl3-build)
+for each platform, the tests and the packaging scripts.
 
-### Linux (SDL3)
+Pushing a tag runs the `SDL3 builds` workflow, which builds and tests every
+platform and attaches the packages to that tag's release.
 
-A native 64-bit Linux build replaces only the Win32/DirectX/WinMM bindings. It
-uses SDL3, with optional FluidSynth for the music:
+## Play
 
-```bash
-cmake -S ports/sdl3 -B build/sdl3 -G Ninja && cmake --build build/sdl3
-scripts/repo-python --stdlib scripts/run-linux.py
-```
-
-See [the Linux section](docs/BUILD.md#linux-sdl3-build) for assets, controls and tests.
-
-### Native Windows source build
-
-The Windows build shown in the video uses an **exported source package** with
-`reconstruction/src/`, the pinned VC4 compiler/headers/libraries, support files
-and `reconstruction/build-plan.json`. Windows PowerShell 5.1 and x86 application
-support are sufficient; Python, WSL and Visual Studio are not needed on the
-Windows machine.
-
-**Prepare the package on Linux/WSL** after the restored-CRT build above. Choose
-a new package directory. Obtain `ddraw.dll` and `ddraw.ini` configured for the
-[tested cnc-ddraw windowed profile](docs/BUILD.md#windowed-windows-play), then run
-from the repository root:
-
-```bash
-scripts/repo-python scripts/run-windows.py \
-  --profile vc40-restored-crt --prepare-only
-mkdir -p build/windows-source-package/game
-cp -a build/runtime/vc40-restored-crt/. build/windows-source-package/game/
-cp /absolute/path/to/cnc-ddraw/ddraw.dll \
-  /absolute/path/to/cnc-ddraw/ddraw.ini build/windows-source-package/game/
-scripts/repo-python scripts/export-windows-build.py \
-  build/windows-source-package/reconstruction
-```
-
-The exporter requires the completed Linux build and pinned local toolchain;
-`reconstruction/` must not already exist. It generates the Windows launchers
-and build plan. The `.ps1` file alone is not a complete build package.
-
-**Build and play on Windows:**
-
-1. Copy the entire `build/windows-source-package/` folder to Windows. Keep its
-   `game/`, `reconstruction/` and generated `.cmd` files together.
-2. Open **Build Reconstruction.cmd** in the package root. It verifies the
-   supplied inputs, compiles all **141 C/C++ units** with English percentage
-   progress, extracts the **19 approved original CRT members**, and links the
-   EXE. The required linker compatibility setting is applied automatically.
-3. Wait for **BUILD COMPLETE**. The new executable is `build/game/dxball.exe`;
-   compiler output is in `build/logs/` and the receipt is `build/build-report.json`,
-   all relative to the package root.
-4. Open **Play Rebuilt DX-Ball.cmd** to play the newly compiled game. Building
-   does not launch it; the existing `game/` copy and rebuilt score saves are
-   preserved.
-
-The normal launcher compiles every source unit. An optional incremental build
-can be run from the package root in PowerShell:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\reconstruction\Build-Reconstruction.ps1 -Incremental
-```
-
-`-Incremental` reuses objects only when their compiler/source/header/flag context
-and hashes match. See [native Windows build details](docs/BUILD.md#native-windows-source-build).
+The window opens at twice the original 640×480 when the screen has room, and
+it can be resized. `Alt+Enter` toggles full screen, `P` pauses and `Esc` leaves
+the current mode. Rankings and edited boards are saved in the game folder.
 
 ## Contribute
 
-This reconstruction was built with AI coding agents. Testing, recovered
-semantics, readability and platform support can still improve. Feedback, bug
-reports and contributions are welcome.
-
-- **Testing and bug reports.** We have not tested every board, power-up or
-  system configuration. Help test the original 50-board campaign, windowed and
-  fullscreen behavior, audio/MIDI, frame pacing, and score/editor save flows.
-  [Report issues](https://github.com/N0zoM1z0/dx-ball/issues/new) with your commit
-  or build, OS, Wine/DirectDraw wrapper if used, reproduction steps, and expected
-  versus actual behavior. Screenshots, videos and logs help.
-- **Ports.** Help bring the shared C/C++ core to more platforms and
-  architectures, or develop rendering, audio and input backends. Keep platform
-  changes separate from the verified VC4 reconstruction.
-- **Semantics and readable code.** Review reconstructed behavior, improve names
-  and types, simplify control flow, and clarify comments or documentation.
-  Focused fixes with a reproducible example or relevant regression check are
-  welcome.
-
-Send pull requests to **`main`**. Changes to recovered game code should preserve
-the accepted VC4 matches and include the relevant verification; see the
-[contributor workflow](docs/agent/WORKFLOW.md).
+[Report issues](https://github.com/malespiaut/dx-ball-sdl3port/issues/new) for
+the port with your platform, package or commit, reproduction steps, and
+expected versus actual behavior. Platform changes belong in `ports/sdl3/`
+and the `src/sdl3_*` files: the recovered game sources and the root
+`CMakeLists.txt` are hashed into the upstream verification records. Report
+problems in the recovered game logic upstream.
 
 ## Read the code
 
 - [Architecture](docs/ARCHITECTURE.md): entry, modes, a gameplay frame and platform services.
-- [Source map](src/README.md): the modules and compiler owners behind each subsystem.
-- [Research notes](docs/research/README.md): source decisions and recorded experiments.
-- [Contributor handoff](docs/agent/HANDOFF.md): current artifacts and the next verification work.
-- [Codex setup](docs/SETUP.md): tools, REA connection and a reconstruction workflow.
+- [Source map](src/README.md): the modules behind each subsystem.
+- [SDL3 build guide](docs/BUILD.md#sdl3-build): the platform layer and its tests.
 
 DX-Ball was created by Michael P. Welch, with 3D graphics by Seumas McNally.
 See [LICENSE](LICENSE).
