@@ -16,6 +16,8 @@ if(NOT UNIX OR APPLE OR WIN32)
 endif()
 get_filename_component(DXBALL_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 add_subdirectory("${DXBALL_ROOT}" core)
+# The root project's diagnostic inspectors are not part of the game.
+set_target_properties(dxball_resources dxball_boards PROPERTIES EXCLUDE_FROM_ALL ON)
 
 # The root build keeps balls.cpp on x87 to retain its rebound rounding.
 # Targets without x87 (aarch64) compile it with their native floating point.

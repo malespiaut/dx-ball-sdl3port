@@ -1,5 +1,5 @@
 /* Win32 service emulation used by the SDL3 build, exercised without a window. */
-#define _DEFAULT_SOURCE /* mkdtemp, setenv */
+#define _DEFAULT_SOURCE /* setenv */
 #include "check.h"
 #include "sdl3_adapter.h"
 #include "clock_api.h"
@@ -9,7 +9,9 @@
 #include "paddle.h"
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#ifdef _WIN32
+#define setenv(name, value, overwrite) _putenv_s(name, value)
+#endif
 
 static DxBallUInt seen[16];
 static DxBallHandle seen_wparam[16];
@@ -186,8 +188,25 @@ static void test_files(const char *directory)
     view = (char *)dxball_midi_map_view(mapping, 4, 0, 0, 0);
     CHECK(view != NULL && memcmp(view, "DX-Ball data", 12) == 0);
     dxball_midi_unmap_view(view);
+    /* The descriptor sits at end of file after the read; a view still
+       starts at its own offset. */
+    view = (char *)dxball_midi_map_view(mapping, 4, 0, 3, 4);
+    CHECK(view != NULL && memcmp(view, "Ball", 4) == 0);
+    dxball_midi_unmap_view(view);
     CHECK_EQ(dxball_file_close(mapping), 1);
     CHECK_EQ(dxball_file_close(file), 1);
+
+    /* Game files are binary: CR, LF and ^Z must survive (Windows text mode). */
+    snprintf(path, sizeof(path), "%s/binary.dat", directory);
+    output = fopen(path, "wb");
+    fwrite("\r\n\x1a\n", 1, 4, output);
+    fclose(output);
+    file = dxball_file_create(path, 0x80000000UL, 1, NULL, 3, 0x80, 0);
+    CHECK_EQ(dxball_file_read(file, buffer, 16, &read_bytes, NULL), 1);
+    CHECK_EQ(read_bytes, 4);
+    CHECK(memcmp(buffer, "\r\n\x1a\n", 4) == 0);
+    CHECK_EQ(dxball_file_close(file), 1);
+    SDL_RemovePath(path);
 
     snprintf(path, sizeof(path), "%s/missing.dat", directory);
     CHECK(dxball_file_create(path, 0x80000000UL, 1, NULL, 3, 0x80, 0) == (DxBallHandle)-1);
@@ -234,9 +253,10 @@ static void test_instance_lock(const char *directory)
 
 int main(void)
 {
-    char directory[] = "/tmp/dxball-adapter-XXXXXX";
+    /* ctest runs each test in the build folder; the name is unique there. */
+    const char *directory = "dxball-adapter-test";
     char path[4096];
-    CHECK(mkdtemp(directory) != NULL);
+    CHECK(SDL_CreateDirectory(directory));
     dxball_bind_sdl3();
     test_virtual_keys();
     test_message_queue();
@@ -244,8 +264,8 @@ int main(void)
     test_files(directory);
     test_memory_and_clock();
     test_instance_lock(directory);
-    snprintf(path, sizeof(path), "%s/sample.dat", directory); unlink(path);
-    snprintf(path, sizeof(path), "%s/dxball-test.lock", directory); unlink(path);
-    rmdir(directory);
+    snprintf(path, sizeof(path), "%s/sample.dat", directory); SDL_RemovePath(path);
+    snprintf(path, sizeof(path), "%s/dxball-test.lock", directory); SDL_RemovePath(path);
+    SDL_RemovePath(directory);
     return CHECK_DONE();
 }

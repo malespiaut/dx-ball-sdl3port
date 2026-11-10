@@ -19,7 +19,8 @@ void dxball_bind_sdl3_midi(void);
 void dxball_sdl3_midi_advance(float *stereo, int frames);
 /* Open an SDL3 audio stream that calls dxball_sdl3_midi_advance. */
 int dxball_sdl3_midi_open_output(void);
-/* Installs FluidSynth as the sink; returns 0 when it is unavailable. */
+/* Loads FluidSynth ($DXBALL_FLUIDSYNTH, else the game folder, else the
+   system) and installs it as the sink; returns 0 when it is unavailable. */
 int dxball_sdl3_fluidsynth_start(void);
 
 #endif

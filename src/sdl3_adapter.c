@@ -1,8 +1,9 @@
-/* Win32 services for the Linux SDL3 build: window, message queue, input,
-   files, local/global memory, file mapping, clock and the instance lock.
-   Mirrors windows_adapter.c; recovered game code calls the same cells. */
+/* Win32 services for the SDL3 build (Linux, macOS, Windows): window, message
+   queue, input, files, local/global memory, file mapping, clock and the
+   instance lock. Mirrors windows_adapter.c; recovered game code calls the
+   same cells. */
 #ifndef _DEFAULT_SOURCE
-#define _DEFAULT_SOURCE /* open flags, pread, flock under strict C11 */
+#define _DEFAULT_SOURCE /* open flags, flock under strict C11 */
 #endif
 #include "sdl3_adapter.h"
 #include "allocator.h"
@@ -16,9 +17,24 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#ifdef _WIN32
+#include <io.h>
+#include <sys/locking.h>
+#define try_lock(file) _locking(file, _LK_NBLCK, 1)
+#define NULL_DEVICE "NUL"
+#else
+#include <sys/file.h>
+#define try_lock(file) flock(file, LOCK_EX | LOCK_NB)
+#define NULL_DEVICE "/dev/null"
+#endif
+#ifndef O_BINARY
+#define O_BINARY 0 /* POSIX opens are always binary */
+#endif
+#ifndef O_CLOEXEC
+#define O_CLOEXEC 0 /* Windows descriptors are not inherited by default */
+#endif
 
 enum {
     WM_DESTROY = 2, WM_SETFOCUS = 7, WM_KILLFOCUS = 8, WM_CLOSE = 0x10, WM_QUIT = 0x12,
@@ -381,17 +397,21 @@ static DxBallInt DXBALL_DDCALL version_info(DxBallVersionInfo *version)
 /* Kernel32 instance semaphore: an advisory lock held for the process lifetime. */
 static DxBallHandle DXBALL_DDCALL open_semaphore(DxBallUInt access, DxBallInt inherit, const char *name)
 {
-    const char *directory = getenv("XDG_RUNTIME_DIR");
+    static const char *const variables[] = { "XDG_RUNTIME_DIR", "TMPDIR", "TEMP" };
+    const char *directory = NULL;
     char path[4096];
     int file;
+    size_t i;
     (void)access; (void)inherit;
+    for (i = 0; directory == NULL && i < sizeof(variables) / sizeof(variables[0]); ++i)
+        directory = getenv(variables[i]);
     snprintf(path, sizeof(path), "%s/%s.lock", directory != NULL ? directory : "/tmp", name);
-    file = open(path, O_RDWR | O_CREAT | O_CLOEXEC, 0600);
-    if (file >= 0 && flock(file, LOCK_EX | LOCK_NB) != 0) {
+    file = open(path, O_RDWR | O_CREAT | O_BINARY | O_CLOEXEC, 0600);
+    if (file >= 0 && try_lock(file) != 0) {
         close(file);
         return 1; /* another instance holds the lock; the game never closes this */
     }
-    instance_lock = file >= 0 ? file : open("/dev/null", O_RDONLY | O_CLOEXEC);
+    instance_lock = file >= 0 ? file : open(NULL_DEVICE, O_RDONLY | O_CLOEXEC);
     return 0;
 }
 static DxBallHandle DXBALL_DDCALL create_semaphore(const DxBallSecurityAttributes *attributes,
@@ -410,7 +430,7 @@ static DxBallHandle DXBALL_DDCALL create_file(const char *name, DxBallUInt acces
     if (creation < 1 || creation > 5) return INVALID_HANDLE;
     mode = (access & 0xc0000000UL) == 0xc0000000UL ? O_RDWR :
            (access & 0x40000000UL) != 0 ? O_WRONLY : O_RDONLY;
-    file = open(name, mode | dispositions[creation] | O_CLOEXEC, 0644);
+    file = open(name, mode | dispositions[creation] | O_BINARY | O_CLOEXEC, 0644);
     return file < 0 ? INVALID_HANDLE : (DxBallHandle)file;
 }
 static DxBallUInt DXBALL_DDCALL file_size(DxBallHandle file, DxBallUInt *high)
@@ -442,7 +462,8 @@ static void *DXBALL_DDCALL local_alloc(DxBallUInt flags, size_t bytes)
 { return (flags & 0x40) != 0 ? calloc(1, bytes) : malloc(bytes); }
 static void *DXBALL_DDCALL local_free(void *memory) { free(memory); return NULL; }
 
-/* A mapping handle is a duplicate descriptor; a view is a private copy. */
+/* A mapping handle is a duplicate descriptor; a view is a private copy.
+   The duplicate shares the file offset, so a view seeks before it reads. */
 static DxBallMidiHandle DXBALL_DDCALL create_mapping(DxBallMidiHandle file, void *security,
     DxBallUInt protect, DxBallUInt high, DxBallUInt low, const char *name)
 {
@@ -460,9 +481,10 @@ static void *DXBALL_DDCALL map_view(DxBallMidiHandle mapping, DxBallUInt access,
     (void)access;
     if (high != 0 || fstat((int)mapping, &status) != 0 || (size_t)status.st_size < low) return NULL;
     if (bytes == 0) bytes = (size_t)status.st_size - low;
+    if (lseek((int)mapping, (off_t)low, SEEK_SET) < 0) return NULL;
     view = (char *)malloc(bytes != 0 ? bytes : 1);
     while (view != NULL && total < bytes) {
-        ssize_t part = pread((int)mapping, view + total, bytes - total, (off_t)(low + total));
+        ssize_t part = read((int)mapping, view + total, bytes - total);
         if (part < 0 && errno == EINTR) continue;
         if (part <= 0) { free(view); return NULL; }
         total += (size_t)part;
@@ -479,7 +501,12 @@ static DxBallInt DXBALL_DDCALL global_unlock(DxBallMidiHandle memory) { (void)me
 static DxBallMidiHandle DXBALL_DDCALL global_free(DxBallMidiHandle memory)
 { free((void *)memory); return 0; }
 
+#ifdef _WIN32
+/* Recovered code also calls the real WinMM timeGetTime; share its epoch. */
+static DxBallUInt DXBALL_DDCALL time_ms(void) { return (DxBallUInt)timeGetTime(); }
+#else
 static DxBallUInt DXBALL_DDCALL time_ms(void) { return (DxBallUInt)SDL_GetTicks(); }
+#endif
 static void split_counter(DxBallCounter *counter, Uint64 value)
 {
     counter->low = (DxBallUInt)value;

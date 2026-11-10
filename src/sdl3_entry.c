@@ -1,5 +1,8 @@
-/* Linux entry: bind SDL3/POSIX services into the recovered import cells,
-   then run the original WinMain loop, as windows_entry.c does on Windows. */
+/* SDL3 entry: bind SDL3 services into the recovered import cells, then run
+   the original WinMain loop, as windows_entry.c does with DirectX. */
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE /* chdir under strict C11 */
+#endif
 #include "sdl3_adapter.h"
 #include "sdl3_draw.h"
 #include "sdl3_midi.h"
@@ -8,9 +11,11 @@
 #include "core.h"
 #include "gameplay.h"
 #include "round.h"
+#include <SDL3/SDL_main.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 /* DXBALL_TEST_SCRIPT drives automated runs through the normal SDL event path:
    "FRAME:ACTION;..." with ACTION key=NAME, down=NAME, up=NAME, click, rclick,
@@ -126,18 +131,35 @@ static void idle(void)
     refreshed = 0;
 }
 
+/* The game opens its files from the current folder. A desktop launch may
+   start elsewhere, so the game's own folder is the fallback. */
+static int find_game_data(void)
+{
+    const char *base;
+    FILE *probe = fopen("intro.pcx", "rb");
+    if (probe == NULL && (base = SDL_GetBasePath()) != NULL && chdir(base) == 0)
+        probe = fopen("intro.pcx", "rb");
+    if (probe != NULL) fclose(probe);
+    return probe != NULL;
+}
+
 int main(int argc, char **argv)
 {
     DxBallHandle status;
-    FILE *probe = fopen("intro.pcx", "rb");
+    const char *video = SDL_getenv("SDL_VIDEO_DRIVER");
     (void)argc;
     /* Recovered loaders read files without checking that they opened. */
-    if (probe == NULL) {
-        fprintf(stderr, "dxball: game data (intro.pcx, ...) not found in the current directory.\n"
-                        "Run scripts/run-linux.py, or start dxball from its prepared folder.\n");
+    if (!find_game_data()) {
+        static const char text[] =
+            "The DX-Ball v1.07 game data (intro.pcx, ...) was not found in the current folder "
+            "or next to the game.\nCopy the original game files there with lowercase names, "
+            "then start DX-Ball again.";
+        fprintf(stderr, "dxball: game data (intro.pcx, ...) not found.\n%s\n", text);
+        /* A headless run has nobody to dismiss a dialog. */
+        if (video == NULL || strcmp(video, "dummy") != 0)
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "DX-Ball", text, NULL);
         return 1;
     }
-    fclose(probe);
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         fprintf(stderr, "dxball: %s\n", SDL_GetError());
         return 1;
