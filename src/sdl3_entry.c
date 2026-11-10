@@ -129,7 +129,15 @@ static void idle(void)
 int main(int argc, char **argv)
 {
     DxBallHandle status;
+    FILE *probe = fopen("intro.pcx", "rb");
     (void)argc;
+    /* Recovered loaders read files without checking that they opened. */
+    if (probe == NULL) {
+        fprintf(stderr, "dxball: game data (intro.pcx, ...) not found in the current directory.\n"
+                        "Run scripts/run-linux.py, or start dxball from its prepared folder.\n");
+        return 1;
+    }
+    fclose(probe);
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         fprintf(stderr, "dxball: %s\n", SDL_GetError());
         return 1;

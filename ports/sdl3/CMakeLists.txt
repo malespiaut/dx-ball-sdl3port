@@ -82,6 +82,13 @@ foreach(name IN ITEMS adapter draw sound midi fluidsynth)
         ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_AUDIO_DRIVER=dummy")
 endforeach()
 
+# Without game data the entry stops with guidance instead of crashing.
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/no-data")
+add_test(NAME dxball_test_sdl3_no_data COMMAND dxball_sdl3
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/no-data")
+set_tests_properties(dxball_test_sdl3_no_data PROPERTIES
+    PASS_REGULAR_EXPRESSION "game data .* not found" ENVIRONMENT "SDL_VIDEO_DRIVER=dummy")
+
 # Headless session over private game files; skipped when they are absent.
 find_package(Python3 COMPONENTS Interpreter QUIET)
 set(DXBALL_TEST_ASSETS "${DXBALL_ROOT}/original" CACHE PATH
