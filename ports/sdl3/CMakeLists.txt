@@ -44,3 +44,21 @@ foreach(test IN ITEMS dxball_test_lp64_layout dxball_test_vtable_bridge)
     dxball_strict(${test})
     add_test(NAME ${test} COMMAND ${test})
 endforeach()
+
+find_package(SDL3 CONFIG REQUIRED)
+
+add_library(dxball_sdl3_platform STATIC
+    "${DXBALL_ROOT}/src/sdl3_adapter.c")
+target_link_libraries(dxball_sdl3_platform PUBLIC dxball_core SDL3::SDL3 m)
+dxball_strict(dxball_sdl3_platform)
+
+foreach(name IN ITEMS adapter)
+    set(test dxball_test_sdl3_${name})
+    add_executable(${test} "${DXBALL_ROOT}/tests/sdl3/test_sdl3_${name}.c")
+    target_include_directories(${test} PRIVATE "${DXBALL_ROOT}/tests/sdl3")
+    target_link_libraries(${test} PRIVATE dxball_sdl3_platform)
+    dxball_strict(${test})
+    add_test(NAME ${test} COMMAND ${test})
+    set_tests_properties(${test} PROPERTIES SKIP_RETURN_CODE 77
+        ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_AUDIO_DRIVER=dummy")
+endforeach()
