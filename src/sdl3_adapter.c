@@ -176,10 +176,17 @@ static void pop(DxBallMessage *message, int remove)
 static DxBallInt DXBALL_DDCALL peek_message(DxBallMessage *message, DxBallHandle target,
     DxBallUInt first, DxBallUInt last, DxBallUInt remove)
 {
+    static int frame_ran; /* the last empty peek let WinMain run a frame */
     (void)target; (void)first; (void)last;
-    if (dxball_sdl3_idle != NULL) dxball_sdl3_idle();
     pump();
-    if (queue_count == 0) return 0;
+    /* Pace once per frame, never per message: mouse motion arriving during
+       every idle wait would otherwise keep the loop from running frames. */
+    if (queue_count == 0 && frame_ran && dxball_sdl3_idle != NULL) {
+        frame_ran = 0;
+        dxball_sdl3_idle();
+        pump();
+    }
+    if (queue_count == 0) { frame_ran = 1; return 0; }
     pop(message, (remove & 1) != 0);
     return 1;
 }

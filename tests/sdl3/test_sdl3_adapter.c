@@ -123,6 +123,43 @@ static void test_message_queue(void)
     CHECK_EQ(message.wparam, 7);
 }
 
+static int idle_calls;
+static void motion_during_idle(void)
+{
+    SDL_Event event;
+    ++idle_calls;
+    memset(&event, 0, sizeof(event));
+    event.type = SDL_EVENT_MOUSE_MOTION; event.motion.xrel = 1;
+    dxball_sdl3_translate_event(&event);
+}
+
+/* Idle paces the loop to the display clock. It must never starve frames:
+   with mouse motion arriving during every idle wait (60+ events per
+   second), the WinMain loop still runs a frame between messages. */
+static void test_idle_does_not_starve_frames(void)
+{
+    DxBallMessage message;
+    SDL_Event event;
+    int i, frames = 0;
+    dxball_sdl3_idle = motion_during_idle;
+    memset(&event, 0, sizeof(event));
+    event.type = SDL_EVENT_MOUSE_MOTION; event.motion.xrel = 1;
+    for (i = 0; i < 100; ++i) dxball_sdl3_translate_event(&event);
+    idle_calls = 0;
+    for (i = 0; i < 400; ++i) {
+        if (dxball_window_peek_message(&message, 0, 0, 0, 0) != 0)
+            CHECK_EQ(dxball_window_get_message(&message, 0, 0, 0), 1);
+        else
+            ++frames;
+    }
+    /* A queued burst is drained without pacing; afterwards every idle wait
+       follows a frame. */
+    CHECK(idle_calls <= frames);
+    CHECK(frames >= 140);
+    dxball_sdl3_idle = NULL;
+    while (dxball_window_peek_message(&message, 0, 0, 0, 1) != 0) {}
+}
+
 static void test_files(const char *directory)
 {
     char path[4096], buffer[16];
@@ -203,6 +240,7 @@ int main(void)
     dxball_bind_sdl3();
     test_virtual_keys();
     test_message_queue();
+    test_idle_does_not_starve_frames();
     test_files(directory);
     test_memory_and_clock();
     test_instance_lock(directory);
