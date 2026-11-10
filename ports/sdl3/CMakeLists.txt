@@ -66,6 +66,11 @@ else()
     message(STATUS "FluidSynth not found: music is silent")
 endif()
 
+add_executable(dxball_sdl3 "${DXBALL_ROOT}/src/sdl3_entry.c")
+target_link_libraries(dxball_sdl3 PRIVATE dxball_sdl3_platform)
+set_target_properties(dxball_sdl3 PROPERTIES OUTPUT_NAME dxball)
+dxball_strict(dxball_sdl3)
+
 foreach(name IN ITEMS adapter draw sound midi fluidsynth)
     set(test dxball_test_sdl3_${name})
     add_executable(${test} "${DXBALL_ROOT}/tests/sdl3/test_sdl3_${name}.c")
@@ -76,3 +81,13 @@ foreach(name IN ITEMS adapter draw sound midi fluidsynth)
     set_tests_properties(${test} PROPERTIES SKIP_RETURN_CODE 77
         ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_AUDIO_DRIVER=dummy")
 endforeach()
+
+# Headless session over private game files; skipped when they are absent.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+set(DXBALL_TEST_ASSETS "${DXBALL_ROOT}/original" CACHE PATH
+    "Folder with the original DX-Ball files for the game smoke test")
+if(Python3_FOUND)
+    add_test(NAME dxball_test_sdl3_game COMMAND ${Python3_EXECUTABLE} -I
+        "${DXBALL_ROOT}/tests/sdl3/smoke_game.py" $<TARGET_FILE:dxball_sdl3> "${DXBALL_TEST_ASSETS}")
+    set_tests_properties(dxball_test_sdl3_game PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 180)
+endif()
