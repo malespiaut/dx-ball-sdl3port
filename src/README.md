@@ -52,6 +52,8 @@ They share the same headers and implementations across native and legacy builds.
 | [windows_crt_entry.c](windows_crt_entry.c), [runtime_entry.c](runtime_entry.c) | Current restored-CRT entry: Windows bindings, recovered heap/I/O/environment initialization, then game entry |
 | [windows_entry.c](windows_entry.c) | WinMain wrapper for compiler-CRT profiles |
 | [windows_adapter.c](windows_adapter.c), [directx_factory_host.c](directx_factory_host.c) | Win32, DirectDraw, DirectSound and WinMM bindings |
+| [sdl3_entry.c](sdl3_entry.c), [sdl3_adapter.c](sdl3_adapter.c) | Linux entry and Win32 services over SDL3/POSIX (window, messages, input, files, clock) |
+| [sdl3_draw.c](sdl3_draw.c), [sdl3_sound.c](sdl3_sound.c), [sdl3_midi.c](sdl3_midi.c), [sdl3_fluidsynth.c](sdl3_fluidsynth.c) | Linux software DirectDraw, DirectSound mixer and WinMM MIDI streams |
 | [sound.c](sound.c), [midi.cpp](midi.cpp), [music.cpp](music.cpp) | WAV buffers, MDS streaming and music lifetime |
 | [file.c](file.c), [memory.c](memory.c) | File/local-memory imports shared by sound, MDS and Bitmap |
 | [allocator.c](allocator.c), [allocator_host.c](allocator_host.c), [cpp_allocator.cpp](cpp_allocator.cpp) | Recovered heap policy, host callbacks and C++ allocation |

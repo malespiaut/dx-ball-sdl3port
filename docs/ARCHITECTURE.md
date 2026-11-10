@@ -90,13 +90,18 @@ provide software image and raster operations. [clock.cpp](../src/clock.cpp) and
 ## Platform services and builds
 
 [windows_adapter.c](../src/windows_adapter.c) binds Win32, DirectDraw,
-DirectSound and WinMM. [sound.c](../src/sound.c) manages WAV/buffer playback;
+DirectSound and WinMM. On Linux, [sdl3_adapter.c](../src/sdl3_adapter.c),
+[sdl3_draw.c](../src/sdl3_draw.c), [sdl3_sound.c](../src/sdl3_sound.c) and
+[sdl3_midi.c](../src/sdl3_midi.c) bind the same cells to SDL3, POSIX and
+FluidSynth. [sdl3_entry.c](../src/sdl3_entry.c) then runs the unchanged
+`dxball_win_main` loop. [sound.c](../src/sound.c) manages WAV/buffer playback;
 [midi.cpp](../src/midi.cpp) parses and streams MDS music;
 [music.cpp](../src/music.cpp) owns song lifetime and controls. Typed service
 pointers and `*Ops`/`*Api` tables let native tools supply controlled dependencies.
 
 [CMakeLists.txt](../CMakeLists.txt) builds the portable core, inspectors and
-MinGW game. The legacy builder also links recovered `runtime_*` CRT owners for
+MinGW game. [ports/sdl3](../ports/sdl3/CMakeLists.txt) adds the Linux game
+on top of that core without changing the root build. The legacy builder also links recovered `runtime_*` CRT owners for
 the restored-CRT game. [allocator_host.c](../src/allocator_host.c) supplies
 portable heap callbacks; [runtime_text_host.c](../src/runtime_text_host.c)
 supplies Unix score conversion. The [build guide](BUILD.md) describes each profile.

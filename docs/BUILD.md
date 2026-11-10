@@ -116,6 +116,92 @@ serial resource limits in [AGENTS.md](../AGENTS.md).
 The [playability record](research/PLAYABILITY_20261031.md) separates these checks
 from manual Windows feedback and the historical focus failure.
 
+## Linux SDL3 build
+
+`ports/sdl3` builds a native 64-bit Linux game from the same recovered source.
+The root project and its compiler recipes are unchanged. The port replaces only
+the Win32, DirectDraw, DirectSound and WinMM import bindings that
+`windows_adapter.c` supplies on Windows:
+
+| File | Replaces |
+| --- | --- |
+| [sdl3_adapter.c](../src/sdl3_adapter.c) | Window, message queue, input, files, local/global memory, file mapping, clock, instance lock |
+| [sdl3_draw.c](../src/sdl3_draw.c) | DirectDraw 1: 8-bit surfaces, Blt/BltFast, colour keys, palettes, flip chain |
+| [sdl3_sound.c](../src/sdl3_sound.c) | DirectSound 1: static PCM buffers mixed into one SDL3 stream |
+| [sdl3_midi.c](../src/sdl3_midi.c), [sdl3_fluidsynth.c](../src/sdl3_fluidsynth.c) | WinMM MIDI streams, rendered by FluidSynth |
+| [sdl3_entry.c](../src/sdl3_entry.c) | `main`: binds the services and runs the original `WinMain` loop |
+
+Requirements: CMake 3.20+, Ninja, GCC or Clang, SDL3 3.2+ and Python 3.11+.
+FluidSynth with a General MIDI soundfont is optional; without it the music is
+silent. The game uses `$DXBALL_SOUNDFONT`, or else the first soundfont it finds
+among `/usr/share/soundfonts/FluidR3_GM.sf2`, `default.sf2` and the
+`/usr/share/sounds/sf2` equivalents.
+
+```bash
+cmake -S ports/sdl3 -B build/sdl3 -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build/sdl3 --parallel 1
+scripts/repo-python --stdlib scripts/run-linux.py
+```
+
+`run-linux.py` checks the assets in `original/` against
+[assets.csv](../config/assets.csv) (English v1.07). It copies them to
+`build/runtime/linux-sdl3/` with the lowercase names the game opens, then
+starts `build/sdl3/dxball` there. Use `--assets DIR` for another folder.
+`--allow-unverified` accepts other asset sets, such as v1.09, with a
+warning. Rankings and edited boards in the runtime folder are kept between
+runs unless you pass `--fresh`.
+
+The window opens at 2× scale when the display has room for it, and it can be
+resized with letterboxing. `Alt+Enter` toggles fullscreen. The mouse is captured
+in relative mode while the window has focus, so the paddle keeps working when
+the pointer reaches the edge on Wayland. `P` pauses and `Esc` leaves the current
+mode, as in the original. Flip and WaitForVerticalBlank follow a fixed 60 Hz
+clock; the original readme calls 60 FPS "the standard" speed. Surfaces are never
+lost, so the unresolved exclusive-mode surface recovery does not apply to this
+build.
+
+### Tests
+
+```bash
+ctest --test-dir build/sdl3 --output-on-failure
+```
+
+Unit tests cover the layouts and COM slot indices the adapter relies on, and
+check that C++ virtual calls reach C vtable slots. They also cover key and
+message translation, files, memory, the instance lock, DirectDraw pixel results,
+DirectSound mixing, and MIDI timing, tempo and callbacks. With FluidSynth they
+also check that a note produces sound.
+`dxball_test_sdl3_game` plays a headless session: splash, menu, a game with a
+natural life loss, pause, resume and the return to the menu. It checks the
+display mode, pause flag, score and lives that the game reports, as well as the
+presented frames. It reads assets from `original/` by default, or from
+`-DDXBALL_TEST_ASSETS=DIR`, and is skipped when they are absent.
+The session is driven by `DXBALL_TEST_SCRIPT`, for example
+`60:key=Escape;220:click;600:shot=game.bmp;900:quit`, where each number counts
+display refreshes.
+
+### 64-bit notes
+
+Handles and pointers follow the host ABI. Game integers stay 32-bit. Every file
+format is parsed with fixed-width fields. Callers still pass the i386 size
+literals (108 for surface descriptions, 20 for sound buffer descriptions, 64
+for MIDI headers), which are smaller than the LP64 records. The emulation never
+validates or copies by those fields. The sanitizer build is clean:
+
+```bash
+F="-fsanitize=address,undefined -fno-sanitize=vptr -fno-omit-frame-pointer"
+cmake -S ports/sdl3 -B build/sdl3-asan -G Ninja -DCMAKE_C_FLAGS="$F" \
+  -DCMAKE_CXX_FLAGS="$F" -DCMAKE_EXE_LINKER_FLAGS="$F" -DCMAKE_SHARED_LINKER_FLAGS="$F"
+```
+
+`vptr` is excluded because the recovered C++ owners call DirectDraw through
+virtual projections of C-built COM objects, by design. Without x87 (aarch64),
+`balls.cpp` uses native floating point, so paddle-rebound angles at exact
+threshold values can differ from the original. `long double` is also wider there.
+Board index 50 is reached only after the final level, when the game is already
+ending. It copies across adjacent globals, as on i386, but the bytes differ
+because the LP64 explosion list is larger.
+
 ## Local delivery
 
 `build/delivery/dxball-v1.07-vc40-reconstructed.zip` contains the tested EXE,

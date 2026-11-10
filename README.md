@@ -89,6 +89,18 @@ CRT members. Original assets are supplied separately. The
 [build guide](docs/BUILD.md) covers headless Wine, other build profiles and the
 local delivery bundle.
 
+### Linux (SDL3)
+
+A native 64-bit Linux build replaces only the Win32/DirectX/WinMM bindings. It
+uses SDL3, with optional FluidSynth for the music:
+
+```bash
+cmake -S ports/sdl3 -B build/sdl3 -G Ninja && cmake --build build/sdl3
+scripts/repo-python --stdlib scripts/run-linux.py
+```
+
+See [the Linux section](docs/BUILD.md#linux-sdl3-build) for assets, controls and tests.
+
 ### Native Windows source build
 
 The Windows build shown in the video uses an **exported source package** with
