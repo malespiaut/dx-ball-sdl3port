@@ -49,11 +49,12 @@ find_package(SDL3 CONFIG REQUIRED)
 
 add_library(dxball_sdl3_platform STATIC
     "${DXBALL_ROOT}/src/sdl3_adapter.c"
-    "${DXBALL_ROOT}/src/sdl3_draw.c")
+    "${DXBALL_ROOT}/src/sdl3_draw.c"
+    "${DXBALL_ROOT}/src/sdl3_sound.c")
 target_link_libraries(dxball_sdl3_platform PUBLIC dxball_core SDL3::SDL3 m)
 dxball_strict(dxball_sdl3_platform)
 
-foreach(name IN ITEMS adapter draw)
+foreach(name IN ITEMS adapter draw sound)
     set(test dxball_test_sdl3_${name})
     add_executable(${test} "${DXBALL_ROOT}/tests/sdl3/test_sdl3_${name}.c")
     target_include_directories(${test} PRIVATE "${DXBALL_ROOT}/tests/sdl3")
